@@ -1,0 +1,5 @@
+{
+  "name": "BaseBuzz",
+  "description": "Onchain Reputation Layer for Base. Measure and verify your influence onchain.",
+  "requestFramePermissions": []
+}
