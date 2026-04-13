@@ -6,9 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Shield, Star, Zap, Share2, ExternalLink, Award, TrendingUp } from 'lucide-react';
+import { Shield, Star, Zap, Share2, ExternalLink, Award, TrendingUp, Twitter, CheckCircle2, Lock, Loader2, Rocket, Hammer, Vote, BarChart3, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { useEffect, useState, useMemo } from 'react';
 
@@ -18,8 +18,8 @@ export default function ReputationDashboard() {
     address: address,
   });
 
-  const [reputationScore, setReputationScore] = useState(0);
-  const [isCalculated, setIsCalculated] = useState(false);
+  const [isXConnected, setIsXConnected] = useState(false);
+  const [isConnectingX, setIsConnectingX] = useState(false);
 
   // Mock reputation metrics
   const metrics = useMemo(() => {
@@ -30,28 +30,68 @@ export default function ReputationDashboard() {
     
     // Simple score calculation
     let score = 20; // Base score for being onchain
-    if (balanceValue > 0.01) score += 30;
-    if (balanceValue > 0.1) score += 20;
-    if (hasBasename) score += 30;
+    if (balanceValue > 0.01) score += 20;
+    if (balanceValue > 0.1) score += 15;
+    if (hasBasename) score += 25;
+    
+    // Boost from X
+    if (isXConnected) score += 20;
     
     return {
       score: Math.min(score, 100),
       level: score > 80 ? 'Legend' : score > 50 ? 'Influencer' : 'Explorer',
       onchainAge: '2.4 Years',
       txCount: '1,240',
-      trustScore: score + 5,
+      trustScore: Math.min(score + 5, 100),
+      eligibleForBoost: parseFloat('2.4') >= 1 && parseInt('1240') >= 100,
     };
-  }, [isConnected, address, balance]);
+  }, [isConnected, address, balance, isXConnected]);
 
+  const reputationScore = metrics?.score || 0;
+  const isCalculated = !!metrics;
+
+  // OAuth Message Listener
   useEffect(() => {
-    if (metrics) {
-      const timer = setTimeout(() => {
-        setReputationScore(metrics.score);
-        setIsCalculated(true);
-      }, 500);
-      return () => clearTimeout(timer);
+    const handleMessage = (event: MessageEvent) => {
+      const origin = event.origin;
+      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) return;
+      
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS' && event.data?.provider === 'x') {
+        setIsXConnected(true);
+        setIsConnectingX(false);
+      }
+      if (event.data?.type === 'OAUTH_AUTH_ERROR') {
+        setIsConnectingX(false);
+        console.error('X Auth Error:', event.data.error);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  const handleConnectX = async () => {
+    if (!metrics?.eligibleForBoost) return;
+    
+    setIsConnectingX(true);
+    try {
+      const response = await fetch('/api/auth/x/url');
+      const { url } = await response.json();
+      
+      const width = 600;
+      const height = 700;
+      const left = window.screenX + (window.outerWidth - width) / 2;
+      const top = window.screenY + (window.outerHeight - height) / 2;
+      
+      window.open(
+        url,
+        'x_oauth',
+        `width=${width},height=${height},left=${left},top=${top}`
+      );
+    } catch (e) {
+      console.error('Failed to initiate X auth:', e);
+      setIsConnectingX(false);
     }
-  }, [metrics]);
+  };
 
   const handleShare = async () => {
     try {
@@ -170,6 +210,77 @@ export default function ReputationDashboard() {
           </CardContent>
         </Card>
 
+        {/* X Boost Section */}
+        <Card className="border-neutral-200 shadow-sm overflow-hidden">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-sm font-medium text-neutral-500 uppercase tracking-wider">Reputation Boost</CardTitle>
+                <CardDescription className="text-lg font-bold text-neutral-900">Social Verification</CardDescription>
+              </div>
+              <div className="p-2 bg-blue-50 rounded-lg">
+                <Twitter className="w-5 h-5 text-blue-400" />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-start gap-4 p-4 bg-neutral-50 rounded-2xl border border-neutral-100">
+              <div className="p-2 bg-white rounded-xl shadow-sm">
+                <Shield className="w-6 h-6 text-blue-600" />
+              </div>
+              <div className="flex-1 space-y-1">
+                <p className="font-bold text-neutral-900">X (Twitter) Boost</p>
+                <p className="text-sm text-neutral-500">
+                  Connect your X account to verify your social presence and gain a <span className="text-blue-600 font-bold">+20 point</span> boost.
+                </p>
+                <div className="flex flex-wrap gap-2 pt-2">
+                  <Badge variant="outline" className={`text-[10px] ${parseFloat(metrics?.onchainAge || '0') >= 1 ? 'text-green-600 border-green-200 bg-green-50' : 'text-neutral-400'}`}>
+                    {parseFloat(metrics?.onchainAge || '0') >= 1 ? <CheckCircle2 className="w-3 h-3 mr-1" /> : <Lock className="w-3 h-3 mr-1" />}
+                    1yr+ Onchain
+                  </Badge>
+                  <Badge variant="outline" className={`text-[10px] ${parseInt(metrics?.txCount || '0') >= 100 ? 'text-green-600 border-green-200 bg-green-50' : 'text-neutral-400'}`}>
+                    {parseInt(metrics?.txCount || '0') >= 100 ? <CheckCircle2 className="w-3 h-3 mr-1" /> : <Lock className="w-3 h-3 mr-1" />}
+                    100+ TXs
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            <AnimatePresence mode="wait">
+              {isXConnected ? (
+                <motion.div
+                  key="connected"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center justify-center gap-2 p-3 bg-green-50 text-green-700 rounded-xl font-bold border border-green-100"
+                >
+                  <CheckCircle2 className="w-5 h-5" />
+                  Boost Applied! (+20)
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="not-connected"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  <Button 
+                    className="w-full h-12 bg-black hover:bg-neutral-800 text-white font-bold rounded-xl shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handleConnectX}
+                    disabled={!metrics?.eligibleForBoost || isConnectingX}
+                  >
+                    {isConnectingX ? (
+                      <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                    ) : (
+                      <Twitter className="w-5 h-5 mr-2 fill-current" />
+                    )}
+                    {metrics?.eligibleForBoost ? 'Connect X to Boost' : 'Requirements Not Met'}
+                  </Button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </CardContent>
+        </Card>
+
         {/* Tabs for detailed metrics */}
         <Tabs defaultValue="activity" className="w-full">
           <TabsList className="grid w-full grid-cols-3 bg-neutral-100 p-1">
@@ -224,14 +335,62 @@ export default function ReputationDashboard() {
 
           <TabsContent value="badges" className="pt-4 grid grid-cols-2 gap-4">
             {[
-              { name: 'Early Adopter', color: 'bg-amber-100 text-amber-700' },
-              { name: 'Base Builder', color: 'bg-blue-100 text-blue-700' },
-              { name: 'Active Voter', color: 'bg-green-100 text-green-700' },
-              { name: 'High Volume', color: 'bg-purple-100 text-purple-700' },
+              { 
+                name: 'Early Adopter', 
+                color: 'bg-amber-100 text-amber-700', 
+                icon: Rocket, 
+                desc: 'Joined Base in year 1',
+                earned: true 
+              },
+              { 
+                name: 'Base Builder', 
+                color: 'bg-blue-100 text-blue-700', 
+                icon: Hammer, 
+                desc: 'Deployed a contract',
+                earned: true 
+              },
+              { 
+                name: 'Active Voter', 
+                color: 'bg-green-100 text-green-700', 
+                icon: Vote, 
+                desc: '3+ Governance votes',
+                earned: false 
+              },
+              { 
+                name: 'High Volume', 
+                color: 'bg-purple-100 text-purple-700', 
+                icon: BarChart3, 
+                desc: '1000+ Transactions',
+                earned: true 
+              },
             ].map((badge, i) => (
-              <div key={i} className={`p-4 rounded-2xl ${badge.color} flex flex-col items-center justify-center text-center space-y-2 border border-current/10`}>
-                <Award className="w-8 h-8" />
-                <span className="text-xs font-bold uppercase tracking-tighter">{badge.name}</span>
+              <div 
+                key={i} 
+                className={`p-4 rounded-2xl flex flex-col items-center justify-center text-center space-y-2 border transition-all duration-300 ${
+                  badge.earned 
+                    ? `${badge.color} border-current/10 shadow-sm scale-100` 
+                    : 'bg-neutral-50 text-neutral-400 border-neutral-200 grayscale opacity-60'
+                }`}
+              >
+                <div className="relative">
+                  <badge.icon className="w-8 h-8" />
+                  {!badge.earned && (
+                    <div className="absolute -top-1 -right-1 bg-neutral-200 rounded-full p-0.5 border border-white">
+                      <Lock className="w-2.5 h-2.5 text-neutral-500" />
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-xs font-bold uppercase tracking-tighter block">{badge.name}</span>
+                  <p className="text-[10px] opacity-80 leading-tight max-w-[100px] mx-auto">{badge.desc}</p>
+                </div>
+                {badge.earned && (
+                  <div className="pt-1">
+                    <Badge variant="secondary" className="bg-white/40 text-[8px] h-4 px-1.5 border-none backdrop-blur-sm">
+                      Earned
+                    </Badge>
+                  </div>
+                )}
               </div>
             ))}
           </TabsContent>
