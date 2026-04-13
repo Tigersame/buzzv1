@@ -102,6 +102,18 @@ export default function ReputationDashboard() {
     }
   };
 
+  const handleShareBadge = async (badgeName: string) => {
+    try {
+      const appUrl = process.env.NEXT_PUBLIC_URL || window.location.origin;
+      const text = `I just earned the '${badgeName}' badge on BaseBuzz! 🛡️ My onchain reputation is growing. Check yours:`;
+      
+      // Open Warpcast compose with badge info
+      await sdk.actions.openUrl(`https://warpcast.com/~/compose?text=${encodeURIComponent(text)}&embeds[]=${appUrl}`);
+    } catch (e) {
+      console.error('Badge share error:', e);
+    }
+  };
+
   if (!isConnected) {
     return (
       <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center p-6 text-center">
@@ -366,12 +378,21 @@ export default function ReputationDashboard() {
             ].map((badge, i) => (
               <div 
                 key={i} 
-                className={`p-4 rounded-2xl flex flex-col items-center justify-center text-center space-y-2 border transition-all duration-300 ${
+                className={`p-4 rounded-2xl flex flex-col items-center justify-center text-center space-y-2 border transition-all duration-300 relative group ${
                   badge.earned 
                     ? `${badge.color} border-current/10 shadow-sm scale-100` 
                     : 'bg-neutral-50 text-neutral-400 border-neutral-200 grayscale opacity-60'
                 }`}
               >
+                {badge.earned && (
+                  <button 
+                    onClick={() => handleShareBadge(badge.name)}
+                    className="absolute top-2 right-2 p-1.5 bg-white/50 hover:bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-sm border border-black/5"
+                    title="Share Badge"
+                  >
+                    <Share2 className="w-3 h-3 text-current" />
+                  </button>
+                )}
                 <div className="relative">
                   <badge.icon className="w-8 h-8" />
                   {!badge.earned && (
